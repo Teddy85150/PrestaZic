@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using System.Web.Http;
 using System.IO;
 using System.Diagnostics;
+using System.Configuration;
 
 namespace PrestaZic
 {
@@ -37,7 +38,7 @@ namespace PrestaZic
                 File.WriteAllBytes(cheminImage, buffer);
 
                 // Code pour déclencher l'impression de l'image
-                log.WriteToFile("Starting printing image " + filename + " in background.");
+                log.WriteToFile("Starting printing image " + filename + " in background on printer " + ConfigurationManager.AppSettings["PrinterName"].ToString());
 
                 ImagePrinter imagePrinter = new ImagePrinter(cheminImage);
                 _ = Task.Run( () => imagePrinter.PrintImage());
