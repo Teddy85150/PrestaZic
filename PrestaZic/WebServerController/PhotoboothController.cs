@@ -48,9 +48,39 @@ namespace PrestaZic
             return Ok("Printing started");
         }
 
+        [HttpPost]
+        public async Task<IHttpActionResult> Save()
+        {
+            if (!Request.Content.IsMimeMultipartContent())
+            {
+                return StatusCode(HttpStatusCode.UnsupportedMediaType);
+            }
+
+            var provider = new MultipartMemoryStreamProvider();
+            await Request.Content.ReadAsMultipartAsync(provider);
+
+            foreach (var file in provider.Contents)
+            {
+                var filename = file.Headers.ContentDisposition.FileName.Trim('\"');
+                var buffer = await file.ReadAsByteArrayAsync();
+
+                string cheminImage = Path.Combine("C:\\Temp\\PrestaZic\\Photobooth\\SaveTmp", filename);
+
+                // Sauvegarder l'image reçue
+                File.WriteAllBytes(cheminImage, buffer);
+
+                // Code pour déclencher l'impression de l'image
+                log.WriteToFile("Saved image " + filename + ". Ready for transfer");                
+
+            }
+
+            return Ok("Image saved");
+        }
+
         [HttpGet]
         public IHttpActionResult Shutdown()
         {
+            log.WriteToFile("Arrêt de l'ordinateur demandé par le logiciel");
             ProcessStartInfo psi = new ProcessStartInfo("shutdown", "/s /f /t 0")
             {
                 CreateNoWindow = true, // Ne pas afficher de fenêtre

@@ -3,10 +3,12 @@ using System.Collections.Generic;
 using System.Configuration;
 using System.Linq;
 using System.Net;
+using System.Net.NetworkInformation;
 using System.Reflection;
 using System.ServiceProcess;
 using System.Text;
 using System.Threading.Tasks;
+using System.Timers;
 using System.Web.Http;
 using System.Web.Http.SelfHost;
 using System.Windows.Forms;
@@ -17,7 +19,9 @@ namespace PrestaZic
     public partial class main : ServiceBase
     {
         Log log = new Log();
+        static System.Timers.Timer timer = new System.Timers.Timer();
         static HttpSelfHostServer server;
+        int retryFTPprocess = 0;
         public main()
         {
             
@@ -55,6 +59,48 @@ namespace PrestaZic
             server = new HttpSelfHostServer(config);
             server.OpenAsync().Wait();
             log.WriteToFile("Web server started !");
+
+            timer.Elapsed += new ElapsedEventHandler(OnElapsedTime);
+            timer.Interval = (int.Parse(ConfigurationManager.AppSettings["TimerPrestaZicFunctionsInSecond"].ToString()) * 1000); //number in milisecinds
+            timer.Enabled = true;
+            timer.Start();
+            log.WriteToFile("Timer set to launch PrestaZic functions every " + ConfigurationManager.AppSettings["TimerPrestaZicFunctionsInSecond"].ToString() + " seconds");
+        }
+
+        private void OnElapsedTime(object source, ElapsedEventArgs e)
+        {
+            log.WriteToFile("Service is recall at " + DateTime.Now);
+            OnWorking();
+        }
+
+        private void OnWorking()
+        {
+            log.WriteToFile("Service is working !");
+            if(retryFTPprocess < 5)
+            {
+                log.WriteToFile("Service will try to connect to FTP and send images data !");
+                if (IsConnectedToInternet())
+                {
+                    transferData transferData = new transferData();
+                }
+                else retryFTPprocess++;
+            }
+        }
+
+        static bool IsConnectedToInternet()
+        {
+            try
+            {
+                using (Ping ping = new Ping())
+                {
+                    PingReply reply = ping.Send("8.8.8.8", 3000); // Google DNS
+                    return reply.Status == IPStatus.Success;
+                }
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         protected override void OnStop()

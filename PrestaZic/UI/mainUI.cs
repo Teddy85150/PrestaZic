@@ -1,4 +1,5 @@
-﻿using System;
+﻿using PrestaZic.UI;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Configuration;
@@ -6,6 +7,7 @@ using System.Data;
 using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Printing;
+using System.IO.Pipes;
 using System.Linq;
 using System.Management;
 using System.ServiceProcess;
@@ -21,9 +23,14 @@ namespace PrestaZic
     {
         string printerName = ConfigurationManager.AppSettings["PrinterName"].ToString();
         string enablePrinter = ConfigurationManager.AppSettings["EnablePrinter"].ToString();
+        NamedPipeClientStream pipeClient = new NamedPipeClientStream(".", "PrestaZic", PipeDirection.In);
+        WifiSettings wifiSettings = new WifiSettings();
+
         public mainUI()
         {
             InitializeComponent();
+            Focus();
+            //pipeClient.Connect();
         }
 
         private void CenterElements()
@@ -54,17 +61,26 @@ namespace PrestaZic
             // Calcul de la position centrée pour la deuxième PictureBox (loader)
             img_loader.Left = (formWidth - loaderPictureWidth) / 2;
             img_loader.Top = img_logo.Bottom + 20; // Ajuster l'espacement avec la première PictureBox
-            ResizeLbl();
-            
+            ResizeLbl(lbl_startArg);
+
+            btn_wifi.Location = new Point(10, 150);
+            btn_wifi.Size = new Size(200, 100);
+            btn_wifi.Font = new Font(btn_shutdown.Font.FontFamily, 20);
+            btn_wifi.BackColor = Color.White;
+            btn_wifi.ForeColor = Color.Black;
+            btn_wifi.FlatStyle = FlatStyle.Flat;
+
+            if(ConfigurationManager.AppSettings["EnableWifiSupport"].ToString() == "Y") btn_wifi.Visible = true;
+
         }
-        private void ResizeLbl()
+        private void ResizeLbl(Label label)
         {
             // Taille de la fenêtre
             int formWidth = this.ClientSize.Width;
             int formHeight = this.ClientSize.Height;
             // Position du texte sous le loader
-            lbl_startArg.Left = (formWidth - lbl_startArg.Width) / 2;
-            lbl_startArg.Top = img_loader.Bottom + 10; // Ajuster l'espacement avec le loader
+            label.Left = (formWidth - label.Width) / 2;
+            label.Top = img_loader.Bottom + 10; // Ajuster l'espacement avec le loader
         }
 
         private void mainUI_Resize(object sender, EventArgs e)
@@ -148,52 +164,22 @@ namespace PrestaZic
                 Console.WriteLine($"Erreur lors du démarrage du service : {ex.Message}");
                 return $"Erreur lors du démarrage du service {serviceName}, merci de contacter l'équipe PrestaZic";
             }
-        }
-
-        private string startWSLmachine(string vmName)
-        {
-            string result = "Erreur";
-            try
-            {
-                // Créer une instance de ManagementObjectSearcher pour récupérer la VM
-                ManagementObjectSearcher searcher = new ManagementObjectSearcher("SELECT * FROM Msvm_ComputerSystem WHERE ElementName = '" + vmName + "'");
-                
-                foreach (ManagementObject vm in searcher.Get())
-                {
-                    // Démarrer la VM
-                    ManagementBaseObject inParams = vm.GetMethodParameters("PowerOn");
-                    ManagementBaseObject outParams = vm.InvokeMethod("PowerOn", inParams, null);
-
-                    if (outParams["ReturnValue"].ToString() == "0")
-                    {
-                        Console.WriteLine($"VM '{vmName}' démarrée avec succès.");
-                        result = "Serveur démarré !";
-                    }
-                    else
-                    {
-                        Console.WriteLine($"Erreur lors du démarrage de la VM. Code d'erreur : {outParams["ReturnValue"]}");
-                        result = $"Erreur lors du démarrage de la VM. Code d'erreur : {outParams["ReturnValue"]}";
-                    }
-                }
-                return result;
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Exception : {ex.Message}");
-                return "Erreur." + ex.Message;
-            }
-        }
- 
+        } 
 
         private void SetLblMsg(string text)
         {
             lbl_startArg.Text = text;
-            ResizeLbl();
+            ResizeLbl(lbl_startArg);
         }
 
         private async void mainUI_Shown(object sender, EventArgs e)
         {
-            if(enablePrinter == "Y")
+            lbl_help.Text = "Assisstance Presta'Zic \nTeddy : 06 30 16 74 26 \nUgo : 06 40 24 79 08";
+            lbl_help.Font = new Font(lbl_help.Font.FontFamily, lbl_help.Font.Size + 6);
+            int padding = 10; // Padding from the edges
+            lbl_help.Location = new Point(this.ClientSize.Width - lbl_help.Width - padding, padding);
+
+            if (enablePrinter == "Y")
             {
                 SetLblMsg("Vérification de l'imprimante...");
                 await Task.Delay(2000);
@@ -215,23 +201,39 @@ namespace PrestaZic
                 {
                     SetLblMsg("Aucune imprimante installée");
                 }
-                await Task.Delay(2000);
-                SetLblMsg("Démarrage du service WSLService...");
-                await Task.Delay(500);
-                SetLblMsg(StartWindowsService("WSLService"));
-                await Task.Delay(2000);
-                SetLblMsg("Démarrage du serveur...");
-                await Task.Delay(2000);
-                await ExecuteCommandAsync("wsl --distribution Ubuntu");
-                await Task.Delay(2000);
-                SetLblMsg("Démarrage du service PrestaZic...");
-                await Task.Delay(500);
-                SetLblMsg(StartWindowsService("PrestaZic"));
-                await Task.Delay(2000);
-                SetLblMsg("Ouverture du photobooth...");
-                await Task.Delay(5000);
-                await ExecuteCommandAsync("\"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe\" --kiosk localhost");
             }
+            await Task.Delay(2000);
+            SetLblMsg("Démarrage du service WSLService...");
+            await Task.Delay(500);
+            SetLblMsg(StartWindowsService("WSLService"));
+            await Task.Delay(2000);
+            SetLblMsg("Démarrage du système...");                
+            await ExecuteCommandAsync("wsl");
+            await Task.Delay(5000);
+            SetLblMsg("Connexion à l'appareil photo...");
+            await Task.Delay(2000);
+            await ExecuteCommandAsync("c:\\PrestaZicService\\wsl.bat");
+            await Task.Delay(2000);
+            SetLblMsg("Démarrage du service PrestaZic...");
+            await Task.Delay(500);
+            SetLblMsg(StartWindowsService("PrestaZic"));
+            await Task.Delay(2000);
+            SetLblMsg("Ouverture du photobooth...");
+            await Task.Delay(5000);
+            await ExecuteCommandAsync("\"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe\" --kiosk localhost");
+            await Task.Delay(5000);
+            SetLblMsg("Le photobooth est démarré !");
+            await Task.Delay(5000);
+            SetLblMsg("");
+            img_loader.Hide();
+            btn_shutdown.Location = new Point(10, 10);
+            btn_shutdown.Size = new Size(200, 100);
+            btn_shutdown.Font = new Font(btn_shutdown.Font.FontFamily, 20);
+            btn_shutdown.BackColor = Color.Red;
+            btn_shutdown.ForeColor = Color.White;
+            btn_shutdown.FlatStyle = FlatStyle.Flat;
+            btn_shutdown.Show();
+            
         }
 
         // Vérifie si l'imprimante est installée
@@ -266,6 +268,12 @@ namespace PrestaZic
                 }
             }
             return false;
+        }
+
+        private void btn_wifi_Click(object sender, EventArgs e)
+        {            
+            wifiSettings.Show();
+            wifiSettings.Focus();
         }
     }
 }

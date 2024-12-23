@@ -10,6 +10,8 @@ using System.Web.Http;
 using System.Windows.Controls;
 using System.Xml;
 using System.Reflection;
+using System.IO.Pipes;
+using System.IO;
 
 namespace PrestaZic
 {
@@ -57,6 +59,19 @@ namespace PrestaZic
         public IHttpActionResult version()
         {
             return Ok("PrestaZic service, version " + Assembly.GetEntryAssembly().GetName().Version);
+        }
+        
+        [HttpGet]
+        public IHttpActionResult GoToMenu()
+        {
+            NamedPipeServerStream pipeServer = new NamedPipeServerStream("PrestaZic", PipeDirection.Out);
+
+            pipeServer.WaitForConnection();
+            StreamWriter writer = new StreamWriter(pipeServer);
+            writer.WriteLine("Got2Menu");
+            writer.Flush();
+            pipeServer.Disconnect();
+            return Ok("Menu is openned");
         }
     }
 }
