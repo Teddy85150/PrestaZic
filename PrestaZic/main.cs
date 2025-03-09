@@ -78,10 +78,10 @@ namespace PrestaZic
             log.WriteToFile("Service is working !");
             if(retryFTPprocess < 5)
             {
-                log.WriteToFile("Service will try to connect to FTP and send images data !");
+                log.WriteToFile("Service will try to connect to Google Drive and send images data !");
                 if (IsConnectedToInternet())
                 {
-                    transferData transferData = new transferData();
+                    Task.Run(() => { transferToDrive transferToDrive = new transferToDrive(); });
                 }
                 else retryFTPprocess++;
             }
@@ -123,7 +123,7 @@ namespace PrestaZic
                     Stop();
                     break;
                 case "UI":
-                    Application.Run(new mainUI());
+                    Application.Run(new mainUI());                    
                     break;
                 default:
                     Console.Write("Starting PrestaZic in DEBUG mode");
@@ -135,7 +135,7 @@ namespace PrestaZic
         public void CheckUpdate()
         {
             AutoUpdater.Synchronous = true;
-            AutoUpdater.Start("ftp://cloud.tedev.fr/prestazic_service_version.xml", new NetworkCredential("prestazic@cloud.tedev.fr", "bPFZcvWpL]!I"));
+            AutoUpdater.Start(ConfigurationManager.AppSettings["Update_SRV"].ToString(), new NetworkCredential(ConfigurationManager.AppSettings["Update_Login"].ToString(), ConfigurationManager.AppSettings["Update_PassWd"].ToString()));
         }
     }
 }

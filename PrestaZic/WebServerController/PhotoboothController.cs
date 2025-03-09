@@ -32,7 +32,12 @@ namespace PrestaZic
                 var filename = file.Headers.ContentDisposition.FileName.Trim('\"');
                 var buffer = await file.ReadAsByteArrayAsync();
 
-                string cheminImage = Path.Combine("C:\\Temp\\PrestaZic\\Photobooth\\ExportImg", filename);
+                string cheminImage = Path.Combine(@ConfigurationManager.AppSettings["PrintImgTmp"].ToString(), filename);
+
+                if (!Directory.Exists(@ConfigurationManager.AppSettings["PrintImgTmp"].ToString()))
+                {
+                    Directory.CreateDirectory(@ConfigurationManager.AppSettings["PrintImgTmp"].ToString());
+                }
 
                 // Sauvegarder l'image reçue
                 File.WriteAllBytes(cheminImage, buffer);
@@ -64,7 +69,12 @@ namespace PrestaZic
                 var filename = file.Headers.ContentDisposition.FileName.Trim('\"');
                 var buffer = await file.ReadAsByteArrayAsync();
 
-                string cheminImage = Path.Combine("C:\\Temp\\PrestaZic\\Photobooth\\SaveTmp", filename);
+                string cheminImage = Path.Combine(@ConfigurationManager.AppSettings["SaveImgTmp"].ToString(), filename);
+
+                if (!Directory.Exists(@ConfigurationManager.AppSettings["SaveImgTmp"].ToString()))
+                {
+                    Directory.CreateDirectory(@ConfigurationManager.AppSettings["SaveImgTmp"].ToString());
+                }
 
                 // Sauvegarder l'image reçue
                 File.WriteAllBytes(cheminImage, buffer);
@@ -88,6 +98,14 @@ namespace PrestaZic
             };
             Process.Start(psi);
             return Ok("Shutdown of computer");
+        }
+
+        [HttpGet]
+        public IHttpActionResult SendToDrive()
+        {
+            log.WriteToFile("Envoi des données vers le drive");
+            Task.Run( () => { transferToDrive transferToDrive = new transferToDrive(); });
+            return Ok("Sending files to drive...");
         }
     }
 }

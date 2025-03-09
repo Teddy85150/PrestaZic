@@ -10,10 +10,14 @@ using System.Drawing.Printing;
 using System.IO.Pipes;
 using System.Linq;
 using System.Management;
+using System.Net.Http;
+using System.Runtime.InteropServices;
 using System.ServiceProcess;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Web.Http;
+using System.Web.Http.SelfHost;
 using System.Windows.Forms;
 using System.Xml.Linq;
 
@@ -21,16 +25,60 @@ namespace PrestaZic
 {
     public partial class mainUI : Form
     {
+
+        [DllImport("user32.dll")]
+        private static extern bool SetForegroundWindow(IntPtr hWnd);
+
+        [DllImport("user32.dll")]
+        private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
+        [DllImport("user32.dll")]
+        private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+
+        [DllImport("user32.dll")]
+        private static extern bool IsIconic(IntPtr hWnd);
+
+        private const int SW_RESTORE = 9;
+        private static readonly IntPtr HWND_TOPMOST = new IntPtr(-1);
+        private static readonly IntPtr HWND_NOTOPMOST = new IntPtr(-2);
+        private const uint SWP_NOSIZE = 0x0001;
+        private const uint SWP_NOMOVE = 0x0002;
+        private const uint SWP_SHOWWINDOW = 0x0040;
+
+        [DllImport("user32.dll")]
+        private static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, int dwExtraInfo);
+
+        private const byte VK_MENU = 0x12; // Touche ALT
+        private const byte VK_TAB = 0x09; // Touche TAB
+        private const uint KEYEVENTF_KEYUP = 0x0002;
+
         string printerName = ConfigurationManager.AppSettings["PrinterName"].ToString();
-        string enablePrinter = ConfigurationManager.AppSettings["EnablePrinter"].ToString();
-        NamedPipeClientStream pipeClient = new NamedPipeClientStream(".", "PrestaZic", PipeDirection.In);
+        string enablePrinter = ConfigurationManager.AppSettings["EnablePrinter"].ToString();        
         WifiSettings wifiSettings = new WifiSettings();
+        private readonly HttpClient _httpClient = new HttpClient();
+        static HttpSelfHostServer server;
 
         public mainUI()
         {
             InitializeComponent();
             Focus();
             //pipeClient.Connect();
+#if !DEBUG
+            var config = new HttpSelfHostConfiguration("http://localhost:8012");
+#else
+            var config = new HttpSelfHostConfiguration("http://localhost:8011");
+#endif
+            config.MapHttpAttributeRoutes();
+            config.Routes.MapHttpRoute(
+                name: "PrestaZic client UI",
+                routeTemplate: "client/{action}",
+                defaults: new { controller = "Client" }
+                );
+            Console.WriteLine("Activated : API for PrestaZic Client UI");
+
+            server = new HttpSelfHostServer(config);
+            server.OpenAsync().Wait();
+            Console.WriteLine("Web server started !");
         }
 
         private void CenterElements()
@@ -233,7 +281,13 @@ namespace PrestaZic
             btn_shutdown.ForeColor = Color.White;
             btn_shutdown.FlatStyle = FlatStyle.Flat;
             btn_shutdown.Show();
-            
+
+            btn_sendToDrive.Location = new Point(10, 300);
+            btn_sendToDrive.Size = new Size(200, 100);
+            btn_sendToDrive.Font = new Font(btn_sendToDrive.Font.FontFamily, 20);
+            btn_sendToDrive.FlatStyle = FlatStyle.Flat;
+            btn_sendToDrive.Show();
+
         }
 
         // Vérifie si l'imprimante est installée
@@ -274,6 +328,56 @@ namespace PrestaZic
         {            
             wifiSettings.Show();
             wifiSettings.Focus();
+        }
+
+        private async void btn_sendToDrive_ClickAsync(object sender, EventArgs e)
+        {
+#if DEBUG
+            string url = "http://localhost:8009/photobooth/SendToDrive"; // Remplace par ton URL
+#else
+            string url = "http://localhost:80010/photobooth/SendToDrive"; // Remplace par ton URL
+#endif
+            try
+            {
+                HttpResponseMessage response = await _httpClient.GetAsync(url);
+                response.EnsureSuccessStatusCode();
+                string responseBody = await response.Content.ReadAsStringAsync();
+
+                MessageBox.Show(responseBody, "Succès", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Erreur : " + ex.Message, "Erreur", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        public static void BringToFront()
+        {
+            Process currentProcess = Process.GetCurrentProcess();
+            IntPtr hWnd = currentProcess.MainWindowHandle;
+
+            if (hWnd != IntPtr.Zero)
+            {
+                if (IsIconic(hWnd)) // Vérifie si la fenêtre est minimisée
+                {
+                    ShowWindow(hWnd, SW_RESTORE); // Restaurer la fenêtre
+                }
+
+                // Met la fenêtre en "Always On Top", puis la remet en normal
+                SetWindowPos(hWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE | SWP_SHOWWINDOW);
+                SetWindowPos(hWnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE | SWP_SHOWWINDOW);
+
+                SetForegroundWindow(hWnd); // Donner le focus
+            }
+        }
+
+        public static void ForceFocus()
+        {
+            keybd_event(VK_MENU, 0, 0, 0);  // Simule ALT enfoncé
+            keybd_event(VK_TAB, 0, 0, 0);  // Simule ALT enfoncé
+            keybd_event(VK_MENU, 0, KEYEVENTF_KEYUP, 0); // Relâche ALT
+
+            BringToFront(); // Ensuite, ramène la fenêtre au premier plan
         }
     }
 }
